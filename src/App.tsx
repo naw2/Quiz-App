@@ -91,6 +91,7 @@ export default function App() {
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [dbLoading, setDbLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Teacher / Admin Panel State
   const [viewMode, setViewMode] = useState<'student' | 'teacher'>('student');
@@ -152,6 +153,7 @@ export default function App() {
 
   const fetchOrCreateProfile = async (currentUser: User) => {
     setDbLoading(true);
+    setAuthError(null);
     const docRef = doc(db, 'students', currentUser.uid);
     try {
       const docSnap = await getDoc(docRef);
@@ -172,8 +174,20 @@ export default function App() {
         setProfile(newProfile);
       }
       await fetchUserAttempts(currentUser.uid);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.GET, `students/${currentUser.uid}`);
+    } catch (err: any) {
+      console.error("Profile load or rules error:", err);
+      let errMsg = err?.message || String(err);
+      if (errMsg.includes('permission') || errMsg.includes('Permission') || errMsg.includes('insufficient')) {
+        errMsg = `Access denied by security rules. If you signed in with standard Google, check if your email verification is complete. System Details: ${errMsg}`;
+      } else if (errMsg.includes('offline') || errMsg.includes('network')) {
+        errMsg = `Network connection error. Please verify your internet connection.`;
+      }
+      setAuthError(errMsg);
+      try {
+        handleFirestoreError(err, OperationType.GET, `students/${currentUser.uid}`);
+      } catch (logErr) {
+        // Suppress to avoid secondary unhandled promise rejections
+      }
     } finally {
       setDbLoading(false);
       setAuthLoading(false);
@@ -234,10 +248,22 @@ export default function App() {
 
   const handleLogin = async () => {
     setAuthLoading(true);
+    setAuthError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
+      let errMsg = err?.message || String(err);
+      if (err?.code === 'auth/popup-blocked') {
+        errMsg = 'The Google login pop-up was blocked by your mobile browser. Please allow popups in your browser settings, disable content blockers, or open the link directly in Safari/Chrome instead of inside an in-app social browser.';
+      } else if (err?.code === 'auth/popup-closed-by-user') {
+        errMsg = 'The log in was cancelled because the Google pop-up window was closed before finishing.';
+      } else if (err?.code === 'auth/cancelled-by-user') {
+        errMsg = 'Authentication cancelled by user.';
+      } else {
+        errMsg = `Login failed: ${errMsg}`;
+      }
+      setAuthError(errMsg);
       setAuthLoading(false);
     }
   };
@@ -410,6 +436,26 @@ export default function App() {
           </div>
           <h1 className="text-3xl font-black text-slate-800 mb-2">Python Scholar</h1>
           <p className="text-slate-500 font-bold mb-8">Register/Sign in to keep track of your scores, streaks, and level up!</p>
+
+          {authError && (
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl text-left text-xs leading-relaxed">
+              <div className="flex items-start gap-2 text-red-700 font-bold">
+                <span className="text-sm">⚠️</span>
+                <div>
+                  <p className="font-extrabold text-red-850">Connection or Pop-up Blocker Info</p>
+                  <p className="text-[11px] font-semibold mt-0.5">{authError}</p>
+                </div>
+              </div>
+              <div className="bg-white/80 p-3 rounded-xl border border-red-100 mt-3 space-y-1.5">
+                <p className="font-black text-slate-700 text-[10px] uppercase tracking-wider">💡 Actionable tips for Mobile Phones:</p>
+                <ul className="list-disc pl-4 text-slate-650 text-[11px] font-bold space-y-1">
+                  <li>Do <strong>NOT</strong> click links inside chat/social apps (like Facebook, Messenger, LINE, WhatsApp, WeChat). They block Google Auth popups in their mini-browsers.</li>
+                  <li><strong>Copy the link</strong> and open it directly inside a separate browser application like <strong>Safari</strong> (iOS) or <strong>Chrome</strong> (Android).</li>
+                  <li>If prompted with "This site is attempting to open a pop-up window", tap <strong>Allow</strong> or <strong>Open</strong>.</li>
+                </ul>
+              </div>
+            </div>
+          )}
 
           <button 
             onClick={handleLogin}
