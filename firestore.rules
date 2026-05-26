@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default safety catch-all rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function incoming() { 
+      return request.resource.data; 
+    }
+    
+    function existing() { 
+      return resource.data; 
+    }
+    
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'nawnaw1986@gmail.com';
+    }
+
+    // Validation definitions
+    function isValidStudent(student) {
+      return student.id == request.auth.uid
+        && student.email == request.auth.token.email
+        && student.name is string && student.name.size() > 0 && student.name.size() <= 200
+        && student.xp is int && student.xp >= 0
+        && student.level is int && student.level >= 1
+        && student.maxStreak is int && student.maxStreak >= 0
+        && student.keys().hasAll(['id', 'name', 'email', 'xp', 'level', 'maxStreak', 'createdAt'])
+        && student.keys().size() == 7;
+    }
+
+    function isValidQuizAttempt(attempt) {
+      return attempt.id is string && isValidId(attempt.id)
+        && attempt.studentId == request.auth.uid
+        && attempt.studentName is string && attempt.studentName.size() > 0 && attempt.studentName.size() <= 200
+        && attempt.studentEmail == request.auth.token.email
+        && attempt.difficulty in ['Beginner', 'Intermediate', 'Advanced']
+        && attempt.score is int && attempt.score >= 0 && attempt.score <= attempt.totalQuestions
+        && attempt.totalQuestions is int && attempt.totalQuestions > 0
+        && attempt.xpGained is int && attempt.xpGained >= 0
+        && attempt.keys().hasAll(['id', 'studentId', 'studentName', 'studentEmail', 'difficulty', 'score', 'totalQuestions', 'xpGained', 'completedAt'])
+        && attempt.keys().size() == 9;
+    }
+
+    // Match blocks
+    match /students/{studentId} {
+      allow get: if isVerifiedUser() && (isOwner(studentId) || isAdmin());
+      allow list: if isVerifiedUser() && isAdmin();
+      allow create: if isVerifiedUser() 
+                    && isValidId(studentId) 
+                    && isOwner(studentId) 
+                    && isValidStudent(incoming())
+                    && incoming().createdAt == request.time;
+      
+      // Ensure isValidStudent checks are run first on updates
+      allow update: if isVerifiedUser() 
+                    && isOwner(studentId) 
+                    && isValidId(studentId)
+                    && isValidStudent(incoming()) 
+                    && incoming().createdAt == existing().createdAt
+                    && (
+                      // Action A: Edit profile fields safely (only name allowed here)
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['name']))
+                      ||
+                      // Action B: Gain XP / levels from quiz attempt completion
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['xp', 'level', 'maxStreak']))
+                    );
+
+      allow delete: if false;
+    }
+
+    match /quiz_attempts/{attemptId} {
+      // Direct access allowed only to verified owner or admin
+      allow get: if isVerifiedUser() && (existing().studentId == request.auth.uid || isAdmin());
+      // List entries strictly filtered by ownerId and verified or admin
+      allow list: if isVerifiedUser() && (resource.data.studentId == request.auth.uid || isAdmin());
+      
+      // Create quiz attempt
+      allow create: if isVerifiedUser() 
+                    && isValidId(attemptId) 
+                    && incoming().studentId == request.auth.uid
+                    && isValidQuizAttempt(incoming())
+                    && incoming().completedAt == request.time;
+                    
+      // Strictly immutable once written
+      allow update, delete: if false;
+    }
+  }
+}

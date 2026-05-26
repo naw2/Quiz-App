@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Information about a registered student.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User UID from Auth" },
+        "name": { "type": "string", "description": "Display name of the student" },
+        "email": { "type": "string", "description": "Verified email of the student" },
+        "xp": { "type": "number", "description": "Current total XP" },
+        "level": { "type": "number", "description": "Current level of the student" },
+        "maxStreak": { "type": "number", "description": "All-time maximum streak" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "name", "email", "xp", "level", "maxStreak", "createdAt"]
+    },
+    "QuizAttempt": {
+      "title": "QuizAttempt",
+      "description": "An attempt record of a completed Python quiz.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique attempt document ID" },
+        "studentId": { "type": "string", "description": "UID of the student" },
+        "studentName": { "type": "string", "description": "Name of the student" },
+        "studentEmail": { "type": "string", "description": "Email of the student" },
+        "difficulty": { "type": "string", "description": "Quiz difficulty level chosen" },
+        "score": { "type": "number", "description": "Correct answers count" },
+        "totalQuestions": { "type": "number", "description": "Total quiz questions" },
+        "xpGained": { "type": "number", "description": "XP gained from this attempt" },
+        "completedAt": { "type": "string", "format": "date-time", "description": "Completed timestamp" }
+      },
+      "required": ["id", "studentId", "studentName", "studentEmail", "difficulty", "score", "totalQuestions", "xpGained", "completedAt"]
+    }
+  },
+  "firestore": {
+    "students/{studentId}": {
+      "schema": "Student",
+      "description": "Student user profiles."
+    },
+    "quiz_attempts/{attemptId}": {
+      "schema": "QuizAttempt",
+      "description": "Table of completed test attempts."
+    }
+  }
+}

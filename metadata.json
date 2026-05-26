@@ -1,0 +1,6 @@
+{
+  "name": "Python Pro Quiz",
+  "description": "An interactive Python quiz app for students with Google registration, real-time Firestore database persistence, XP leveling, and streak logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
